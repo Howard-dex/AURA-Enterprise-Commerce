@@ -1,0 +1,91 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum ProductLine {
+  CONSUMER_FLAGSHIP
+  INDUSTRIAL_SMART
+}
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  PAID
+  FULFILLED
+  CANCELLED
+}
+
+model Product {
+  id              String        @id @default(cuid())
+  slug            String        @unique
+  skuCode         String        @unique
+  nameZh          String
+  nameEn          String
+  category        String
+  productLine     ProductLine   @default(CONSUMER_FLAGSHIP)
+  retailPrice     Decimal       @db.Decimal(10, 2)
+  wholesaleBase   Decimal       @db.Decimal(10, 2)
+  stockQuantity   Int           @default(0)
+  rating          Float         @default(4.9)
+  specsJson       Json          // 结构化规格参数 (材质、续航、传感器、认证等)
+  tierPricingJson Json          // 阶梯批发折扣规则 [{minQty: 10, discount: 0.92}, ...]
+  isActive        Boolean       @default(true)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  orderItems      OrderItem[]
+  inquiries       B2BInquiry[]
+
+  @@index([productLine, category, isActive])
+}
+
+model Order {
+  id              String      @id @default(cuid())
+  orderNo         String      @unique
+  customerEmail   String
+  customerName    String
+  shippingAddress String
+  subtotal        Decimal     @db.Decimal(12, 2)
+  discountAmount  Decimal     @db.Decimal(12, 2)
+  totalAmount     Decimal     @db.Decimal(12, 2)
+  couponCode      String?
+  status          OrderStatus @default(PENDING_PAYMENT)
+  utmSource       String?
+  utmCampaign     String?
+  createdAt       DateTime    @default(now())
+  items           OrderItem[]
+
+  @@index([customerEmail, createdAt])
+}
+
+model OrderItem {
+  id          String  @id @default(cuid())
+  orderId     String
+  productId   String
+  variantInfo String  // 选配颜色、版本、定制激光镌刻等
+  quantity    Int
+  unitPrice   Decimal @db.Decimal(10, 2)
+  order       Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product     Product @relation(fields: [productId], references: [id])
+}
+
+model B2BInquiry {
+  id               String   @id @default(cuid())
+  companyName      String
+  contactPerson    String
+  contactEmail     String
+  contactPhone     String
+  cooperationType  String   // 企业集采 / 区域经销代理 / OEM贴牌定制 / 私有化部署
+  estimatedQty     Int
+  targetBudget     String?
+  customNotes      String?
+  productId        String?
+  product          Product? @relation(fields: [productId], references: [id])
+  crmSynced        Boolean  @default(false)
+  createdAt        DateTime @default(now())
+
+  @@index([cooperationType, createdAt])
+}
